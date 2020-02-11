@@ -1,6 +1,7 @@
 const WebSocket = require('ws')
 const ReconnectingWebSocket = require('reconnecting-websocket')
 const fs = require('fs')
+const path = require('path')
 
 // check if logs folder exists.
 // if not, create logs folder and optedin.json file
@@ -19,8 +20,7 @@ try {
 
 var logDirectory = {
   Array: [],
-  eval: function () {
-    try {
+  eval: function () { try {
       var usersDirectory = fs.readdirSync('./logs/')
       for (i in usersDirectory) {
         // this skips an iteration of the loop if it is the optedin.json file
@@ -28,6 +28,14 @@ var logDirectory = {
         // adds file to self's Array
         this.Array.push(usersDirectory[i].split('.')[0])
       }
+    } catch (e) { console.error(e) }
+  },
+  createFile: function(name) {
+    this.eval()
+    try {
+      (!this.Array.includes(`./logs/${name}.txt`))
+      ? fs.writeFileSync(`./logs/${name}.txt`)
+      : null
     } catch (e) { console.error(e) }
   }
 }
@@ -60,29 +68,40 @@ rws.addEventListener('message', (e) => {
   
   const checkArray = (name) => {
     if (message.data.includes(name)) {
-      logDirectory.eval()
-      
-      if (!(logDirectory.Array.includes(`${name}.txt`))) {fs.writeFileSync(`./logs/${name}.txt`, '')}
-      
-      var userFileArray = fs.readFileSync(`./logs/${name}.txt`, 'utf-8').split('\r\n').filter(Boolean)
-      
-      if (userFileArray.length === 5) {
-        userFileArray.shift()
-        userFileArray.push(`${message.timestamp} ${message.nick}: ${message.data}`)
-        fs.writeFileSync(`./logs/${name}.txt`, userFileArray.join(`\r\n`))
-      } else {
-        fs.appendFileSync(`./logs/${name}.txt`, `${message.timestamp} ${message.nick}: ${message.data}\r\n`)
-      }
+      logDirectory.createFile(name)
+      formattedMessage = `${message.timestamp} ${message.nick}: ${message.data}`
+
+      fs.readFile(`./logs/${name}.txt`, {encoding:'utf-8'}, (err, data) => {
+        if (err) {
+          console.error(err);
+          return;
+        }
+        var lines = data.split('\r\n').filter(Boolean)
+        var newFile;
+        console.log(data)
+        if (lines === 5) {
+          lines.shift()
+          lines.push(formattedMessage)
+          newFile = lines.join(`\r\n`)
+        } else {
+          lines.push(formattedMessage)
+          newFile = lines.join(`\r\n`)
+        }
+        console.log(data + '\nnew file')
+        
+        fs.writeFile(`./logs/${name}.txt`, newFile, (err) => {
+          if (err) { console.error(err) }
+        })
+
+      })
     }
   }
   
   if (message.type === 'MSG') {
     try {
       var optedinJSON = JSON.parse(fs.readFileSync('./logs/optedin.json').toString())
-      optedinJSON.users.some(checkArray)
-    } catch (e) {
-      console.error(e)
-    }
+      optedinJSON["users"].some(checkArray)
+    } catch (e) { console.error(e) }
   }
 
 })
